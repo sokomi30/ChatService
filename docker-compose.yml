@@ -4,6 +4,8 @@ services:
   mongodb:
     image: mongo:7
     container_name: chat_mongo
+    ports:
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
 
@@ -12,8 +14,13 @@ services:
       context: .
       dockerfile: ChatService.Api/Dockerfile
     container_name: chat_api
+    ports:
+      - "5139:8080"
     environment:
       - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - Jwt__Key=ChatServiceSecretKey1234567890123456!
+      - Jwt__Issuer=ChatService
+      - Jwt__Audience=ChatClient
     depends_on:
       - mongodb
 

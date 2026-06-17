@@ -10,48 +10,76 @@ interface Message {
 
 function App() {
   const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [token, setToken] = useState('')
   const [joined, setJoined] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const ws = useRef<WebSocket | null>(null)
+
+  const auth = async () => {
+    const url = `http://localhost:5139/api/auth/${mode}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setToken(data.token)
+    } else {
+      alert('Error')
+    }
+  }
 
   const join = () => {
     if (!username.trim()) return
     setMessages([])
-    ws.current = new WebSocket(`ws://${window.location.host}/ws?username=${username}`)
+    ws.current = new WebSocket(`ws://localhost:5139/ws?username=${username}`)
 
+    ws.current.onopen = () => console.log('Connected!')
     ws.current.onmessage = (e) => {
-    const data = JSON.parse(e.data)
-
+      const data = JSON.parse(e.data)
       if (data.type === 'history') {
         setMessages(data.messages)
-      } else if (data.type === 'message') {
-        setMessages(prev => [...prev, data])
       } else {
         setMessages(prev => [...prev, data])
       }
     }
-    ws.current.onopen = () => {
-       console.log('Connected!')
-    }
+
     setJoined(true)
   }
 
   const send = () => {
-  if (!input.trim() || !ws.current) return
-  
-  // Ждём подключения
-  if (ws.current.readyState !== WebSocket.OPEN) {
-    setTimeout(send, 100)
-    return
+    if (!input.trim() || !ws.current) return
+    if (ws.current.readyState !== WebSocket.OPEN) {
+      setTimeout(send, 100)
+      return
+    }
+    ws.current.send(JSON.stringify({ text: input }))
+    setInput('')
   }
-  
-  ws.current.send(JSON.stringify({ text: input }))
-  setInput('')
-}
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') send()
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
+          <h1 className="text-white text-2xl mb-4">💬 Chat Login</h1>
+          <input className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 mb-3"
+            placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
+          <input className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 mb-4"
+            type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+          <button onClick={auth} className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 mb-2">
+            {mode === 'login' ? 'Login' : 'Register'}
+          </button>
+          <button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            className="w-full text-gray-400 text-sm hover:text-white">
+            {mode === 'login' ? 'Create account' : 'Back to login'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (!joined) {
@@ -59,15 +87,9 @@ function App() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
           <h1 className="text-white text-2xl mb-4">💬 Join Chat</h1>
-          <input
-            className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 mb-4"
-            placeholder="Your name"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && join()}
-          />
-          <button onClick={join} className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
-            Join
+          <p className="text-gray-400 mb-4">Logged in as: {username}</p>
+          <button onClick={join} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">
+            Join Chat
           </button>
         </div>
       </div>
@@ -80,7 +102,6 @@ function App() {
         <h1 className="text-xl font-bold">💬 Chat Room</h1>
         <span className="text-gray-400">👤 {username}</span>
       </div>
-
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg, i) => (
           <div key={i}>
@@ -104,18 +125,11 @@ function App() {
           </div>
         ))}
       </div>
-
       <div className="bg-gray-800 p-4 flex gap-2">
-        <input
-          className="flex-1 p-2 rounded bg-gray-700 text-white border border-gray-600"
-          placeholder="Type a message..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <button onClick={send} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
-          Send
-        </button>
+        <input className="flex-1 p-2 rounded bg-gray-700 text-white border border-gray-600"
+          placeholder="Type a message..." value={input}
+          onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+        <button onClick={send} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">Send</button>
       </div>
     </div>
   )
