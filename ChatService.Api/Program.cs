@@ -1,12 +1,12 @@
+using ChatService.Api.Models;
 using ChatService.Api.WebSockets;
 using MongoDB.Driver;
-using System.Reflection;
-using ChatService.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<IMongoClient>(_ =>
-    new MongoClient("mongodb://localhost:27017"));
+// MongoDB
+var mongoConnection = builder.Configuration["MongoDB:ConnectionString"] ?? "mongodb://localhost:27017";
+builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoConnection));
 builder.Services.AddScoped<IMongoDatabase>(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase("chatdb"));
 builder.Services.AddScoped(sp =>

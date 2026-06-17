@@ -18,7 +18,7 @@ function App() {
   const join = () => {
     if (!username.trim()) return
     setMessages([])
-    ws.current = new WebSocket(`ws://localhost:5139/ws?username=${username}`)
+    ws.current = new WebSocket(`ws://${window.location.host}/ws?username=${username}`)
 
     ws.current.onmessage = (e) => {
     const data = JSON.parse(e.data)
