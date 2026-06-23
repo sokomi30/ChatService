@@ -1,10 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-using MongoDB.Driver;
 using ChatService.Api.Models;
+using ChatService.Api.Services;
 
 namespace ChatService.Api.Controllers
 {
@@ -12,61 +8,63 @@ namespace ChatService.Api.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly IMongoCollection<User> _users;
-        private readonly IConfiguration _config;
+        private readonly IAuthService _authService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IMongoCollection<User> users, IConfiguration config)
+        public AuthController(IAuthService authService, ILogger<AuthController> logger)
         {
-            _users = users;
-            _config = config;
+            _authService = authService;
+            _logger = logger;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] LoginDto dto)
         {
-            var exists = await _users.Find(u => u.Username == dto.Username).AnyAsync();
-            if (exists) return Conflict("Username taken");
-
-            var user = new User
+            try
             {
-                Username = dto.Username,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
-            };
-            await _users.InsertOneAsync(user);
-            return Ok(new { token = GenerateToken(user) });
+                var (success, message, token) = await _authService.RegisterAsync(dto.Username, dto.Password);
+
+                if (!success)
+                {
+                    return Conflict(new ErrorResponse
+                    {
+                        StatusCode = 409,
+                        Message = message
+                    });
+                }
+
+                return Ok(new { token });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled error during registration");
+                throw;
+            }
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            var user = await _users.Find(u => u.Username == dto.Username).FirstOrDefaultAsync();
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-                return Unauthorized("Invalid credentials");
+            try
+            {
+                var (success, message, token) = await _authService.LoginAsync(dto.Username, dto.Password);
 
-            return Ok(new { token = GenerateToken(user) });
+                if (!success)
+                {
+                    return Unauthorized(new ErrorResponse
+                    {
+                        StatusCode = 401,
+                        Message = message
+                    });
+                }
+
+                return Ok(new { token });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled error during login");
+                throw;
+            }
         }
-
-        private string GenerateToken(User user)
-        {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var claims = new[] { new Claim(ClaimTypes.Name, user.Username) };
-
-            var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddHours(2),
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-    }
-
-    public class LoginDto
-    {
-        public string Username { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
     }
 }
