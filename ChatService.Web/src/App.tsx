@@ -9,6 +9,7 @@ interface Message {
 }
 
 function App() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [token, setToken] = useState('')
@@ -19,7 +20,7 @@ function App() {
   const ws = useRef<WebSocket | null>(null)
 
   const auth = async () => {
-    const url = `http://localhost:5139/api/auth/${mode}`
+    const url = `${apiBaseUrl}/api/auth/${mode}`
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -29,14 +30,19 @@ function App() {
       const data = await res.json()
       setToken(data.token)
     } else {
-      alert('Error')
+      const errorText = await res.text()
+      alert(`Error: ${errorText}`)
     }
   }
 
   const join = () => {
-    if (!username.trim()) return
+    if (!username.trim() || !token) return
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws?access_token=${encodeURIComponent(token)}`
+
     setMessages([])
-    ws.current = new WebSocket(`ws://localhost:5139/ws?username=${username}`)
+    ws.current = new WebSocket(wsUrl)
 
     ws.current.onopen = () => console.log('Connected!')
     ws.current.onmessage = (e) => {
